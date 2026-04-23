@@ -20,6 +20,7 @@ import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
+import com.canhub.cropper.CropImageOptions
 import java.io.File
 
 /**
@@ -116,6 +117,8 @@ class CropActivity : AppCompatActivity() {
         if (originalPath.isNullOrEmpty() && originalUri == null) {
             return
         }
+
+        cropImageView.setImageCropOptions(CropImageOptions())
 
         // 不显示默认的进度条
         cropImageView.isShowProgressBar = false
