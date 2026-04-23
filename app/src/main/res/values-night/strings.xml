@@ -1,4 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AndroidCropView</string>
     <string name="pick_photo">Pick Photo</string>
 </resources>
