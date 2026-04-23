@@ -54,6 +54,8 @@ class CropActivity : AppCompatActivity() {
     private lateinit var ivCrop: ImageView
     private lateinit var ivBack: ImageView
     private lateinit var progressBar: ContentLoadingProgressBar
+    private lateinit var ivRotateLeft: ImageView
+    private lateinit var ivRotateRight: ImageView
 
 
     private val onBackPressedCallback = object : OnBackPressedCallback(true) {
@@ -83,6 +85,8 @@ class CropActivity : AppCompatActivity() {
         ivCrop = findViewById(R.id.ivCrop)
         ivBack = findViewById(R.id.ivBack)
         progressBar = findViewById(R.id.progressBar)
+        ivRotateLeft = findViewById(R.id.ivRotateLeft)
+        ivRotateRight = findViewById(R.id.ivRotateRight)
 
         ViewCompat.setOnApplyWindowInsetsListener(ivBack) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -99,6 +103,12 @@ class CropActivity : AppCompatActivity() {
 
         ivBack.setOnClickListener {
             onBackPressedDispatcher.onBackPressed()
+        }
+        ivRotateLeft.setOnClickListener {
+            cropImageView.rotateImage(-90)
+        }
+        ivRotateRight.setOnClickListener {
+            cropImageView.rotateImage(90)
         }
     }
 
