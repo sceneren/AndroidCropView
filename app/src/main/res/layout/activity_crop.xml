@@ -5,63 +5,110 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#101114"
     tools:context=".CropActivity">
 
-    <com.canhub.cropper.CropImageView
+    <com.github.sceneren.cropview.ImageCropView
         android:id="@+id/cropImageView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <androidx.appcompat.widget.AppCompatImageView
+    <androidx.appcompat.widget.AppCompatImageButton
         android:id="@+id/ivBack"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:padding="8dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/crop_back"
+        android:padding="12dp"
         android:src="@drawable/ic_arrow_back_24"
-        android:tint="@color/black"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@android:color/white" />
 
-    <ImageView
-        android:id="@+id/ivCrop"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginBottom="20dp"
-        android:src="@android:drawable/ic_menu_crop"
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="16dp"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/ivBack"
+        app:layout_constraintTop_toTopOf="@id/ivBack"
+        tools:text="矩形 16:9" />
+
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="0dp"
+        android:layout_height="96dp"
+        android:background="#E6111215"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingHorizontal="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent">
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/ivRotateLeft"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginStart="10dp"
-        android:src="@drawable/ic_rotate_left_24"
-        android:tint="@color/black"
-        app:layout_constraintBottom_toBottomOf="@+id/ivCrop"
-        app:layout_constraintStart_toStartOf="parent" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnReset"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_reset"
+            android:src="@drawable/ic_reset_24" />
 
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/ivRotateRight"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginEnd="10dp"
-        android:src="@drawable/ic_rotate_right_24"
-        android:tint="@color/black"
-        app:layout_constraintBottom_toBottomOf="@+id/ivCrop"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnZoomOut"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_zoom_out"
+            android:src="@drawable/ic_zoom_out_24" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnZoomIn"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_zoom_in"
+            android:src="@drawable/ic_zoom_in_24" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnRotateLeft"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_rotate_left"
+            android:src="@drawable/ic_rotate_left_24" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnRotateRight"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_rotate_right"
+            android:src="@drawable/ic_rotate_right_24" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnShape"
+            style="@style/CropToolbarButton"
+            android:contentDescription="@string/crop_shape"
+            android:src="@drawable/ic_shape_24" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/btnCrop"
+            style="@style/CropToolbarButtonPrimary"
+            android:contentDescription="@string/crop_done"
+            android:src="@drawable/ic_check_24" />
+    </LinearLayout>
 
     <androidx.core.widget.ContentLoadingProgressBar
         android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleSmall"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:indeterminateTint="@android:color/white"
+        app:layout_constraintBottom_toTopOf="@id/bottomBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />

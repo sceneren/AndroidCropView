@@ -4,64 +4,76 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
+    android:fillViewport="true"
     tools:context=".MainActivity">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:padding="20dp">
 
         <Button
             android:id="@+id/btnPickPhoto"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/pick_photo" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="选择的原图" />
+            android:layout_marginTop="16dp"
+            android:text="@string/original_image"
+            android:textSize="16sp" />
 
         <ImageView
             android:id="@+id/ivOriginal"
-            android:layout_width="300dp"
-            android:layout_height="300dp" />
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="8dp"
+            android:background="#1A000000"
+            android:contentDescription="@string/original_image"
+            android:scaleType="centerCrop" />
 
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/btnCropUri"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_marginTop="16dp"
+            android:text="@string/crop_from_uri" />
 
-            <Button
-                android:id="@+id/btnCrop"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="去裁剪" />
+        <Button
+            android:id="@+id/btnCropFile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/crop_from_file" />
 
-            <Button
-                android:id="@+id/btnCropNetImage"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:text="去裁剪网络图片" />
+        <Button
+            android:id="@+id/btnCropNetImage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/crop_from_url" />
 
-            <Button
-                android:id="@+id/btnCropCircle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="10dp"
-                android:text="圆形裁剪" />
-        </LinearLayout>
+        <Button
+            android:id="@+id/btnCropCircle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/crop_circle" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="裁剪后的图片" />
+            android:layout_marginTop="16dp"
+            android:text="@string/cropped_image"
+            android:textSize="16sp" />
 
         <ImageView
             android:id="@+id/ivCropped"
-            android:layout_width="300dp"
-            android:layout_height="300dp" />
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="8dp"
+            android:background="#1A000000"
+            android:contentDescription="@string/cropped_image"
+            android:scaleType="fitCenter" />
     </LinearLayout>
 </ScrollView>

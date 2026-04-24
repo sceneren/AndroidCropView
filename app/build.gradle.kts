@@ -36,18 +36,15 @@ android {
 }
 
 dependencies {
+    implementation(project(":cropview"))
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
+    implementation(libs.bundles.coil)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
-
-    implementation(libs.android.image.cropper)
-    implementation(libs.bundles.coil)
-
-    // 压缩
-    implementation(libs.jpeg.compressor)
 }

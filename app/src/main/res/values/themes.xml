@@ -6,4 +6,17 @@
     </style>
 
     <style name="Theme.AndroidCropView" parent="Base.Theme.AndroidCropView" />
+
+    <style name="CropToolbarButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_marginHorizontal">2dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">12dp</item>
+        <item name="tint">@android:color/white</item>
+    </style>
+
+    <style name="CropToolbarButtonPrimary" parent="CropToolbarButton">
+        <item name="android:background">@drawable/bg_crop_primary_button</item>
+    </style>
 </resources>
