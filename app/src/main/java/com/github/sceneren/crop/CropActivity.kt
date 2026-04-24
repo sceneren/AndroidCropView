@@ -33,15 +33,20 @@ import java.io.File
 class CropActivity : AppCompatActivity() {
 
     companion object {
-        fun createIntent(context: AppCompatActivity, uri: Uri): Intent {
+        private const val EXTRA_CROP_SHAPE = "crop_shape"
+        const val CROP_SHAPE_OVAL = "oval"
+
+        fun createIntent(context: AppCompatActivity, uri: Uri, cropShape: String? = null): Intent {
             return Intent(context, CropActivity::class.java).apply {
                 data = uri
+                cropShape?.let { putExtra(EXTRA_CROP_SHAPE, it) }
             }
         }
 
-        fun createIntent(context: AppCompatActivity, path: String): Intent {
+        fun createIntent(context: AppCompatActivity, path: String, cropShape: String? = null): Intent {
             return Intent(context, CropActivity::class.java).apply {
                 putExtra("path", path)
+                cropShape?.let { putExtra(EXTRA_CROP_SHAPE, it) }
             }
         }
     }
@@ -118,7 +123,16 @@ class CropActivity : AppCompatActivity() {
             return
         }
 
-        cropImageView.setImageCropOptions(CropImageOptions())
+        val cropShape = intent.getStringExtra(EXTRA_CROP_SHAPE)
+        val cropOptions = CropImageOptions().apply {
+            if (cropShape == CROP_SHAPE_OVAL) {
+                this.cropShape = CropImageView.CropShape.OVAL
+                this.fixAspectRatio = true
+                this.aspectRatioX = 1
+                this.aspectRatioY = 1
+            }
+        }
+        cropImageView.setImageCropOptions(cropOptions)
 
         // 不显示默认的进度条
         cropImageView.isShowProgressBar = false

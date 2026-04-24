@@ -11,6 +11,7 @@ activityKtx = "1.13.0"
 constraintlayout = "2.2.1"
 coil = "3.4.0"
 
+jpegCompressor = "1.0.6"
 
 [libraries]
 android-image-cropper = { module = "com.vanniktech:android-image-cropper", version.ref = "androidImageCropper" }
@@ -26,6 +27,8 @@ androidx-constraintlayout = { group = "androidx.constraintlayout", name = "const
 coil = { module = "io.coil-kt.coil3:coil", version.ref = "coil" }
 coil-network = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
 coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
+jpeg-compressor = { module = "io.github.iuuaa:jpeg-compressor", version.ref = "jpegCompressor" }
+
 
 [bundles]
 coil = ["coil", "coil-network", "coil-gif"]

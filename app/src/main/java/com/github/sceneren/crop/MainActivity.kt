@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ivOriginal: ImageView
     private lateinit var btnCrop: Button
     private lateinit var btnCropNetImage: Button
+    private lateinit var btnCropCircle: Button
     private lateinit var ivCropped: ImageView
 
     private var originalUri: Uri? = null
@@ -64,6 +65,7 @@ class MainActivity : AppCompatActivity() {
         ivOriginal = findViewById(R.id.ivOriginal)
         btnCrop = findViewById(R.id.btnCrop)
         btnCropNetImage = findViewById(R.id.btnCropNetImage)
+        btnCropCircle = findViewById(R.id.btnCropCircle)
         ivCropped = findViewById(R.id.ivCropped)
 
         btnPickPhoto.setOnClickListener {
@@ -75,6 +77,9 @@ class MainActivity : AppCompatActivity() {
         btnCropNetImage.setOnClickListener {
             val cropIntent = CropActivity.createIntent(this, "https://picsum.photos/800/800?random=1")
             cropLauncher.launch(cropIntent)
+        }
+        btnCropCircle.setOnClickListener {
+            cropPhotoCircle()
         }
 
     }
@@ -92,6 +97,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val cropIntent = CropActivity.createIntent(this, originalUri!!)
+        cropLauncher.launch(cropIntent)
+    }
+
+    private fun cropPhotoCircle() {
+        if (originalUri == null) {
+            Toast.makeText(this, "请先选择图片", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cropIntent = CropActivity.createIntent(this, originalUri!!, CropActivity.CROP_SHAPE_OVAL)
         cropLauncher.launch(cropIntent)
     }
 }

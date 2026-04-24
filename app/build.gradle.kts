@@ -47,4 +47,7 @@ dependencies {
 
     implementation(libs.android.image.cropper)
     implementation(libs.bundles.coil)
+
+    // 压缩
+    implementation(libs.jpeg.compressor)
 }
