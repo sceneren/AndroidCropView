@@ -1,5 +1,7 @@
 # AndroidCropView
 
+[![](https://jitpack.io/v/sceneren/AndroidCropView.svg)](https://jitpack.io/#sceneren/AndroidCropView)
+
 [English](README.md) | [简体中文](README_zh.md)
 
 AndroidCropView 是一个 Android 自定义图片裁剪 View，不依赖第三方裁剪控件。项目包含：

@@ -1,5 +1,7 @@
 # AndroidCropView
 
+[![](https://jitpack.io/v/sceneren/AndroidCropView.svg)](https://jitpack.io/#sceneren/AndroidCropView)
+
 [English](README.md) | [简体中文](README_zh.md)
 
 AndroidCropView is a custom Android image cropping view. It does not depend on a third-party crop widget. The project contains:
