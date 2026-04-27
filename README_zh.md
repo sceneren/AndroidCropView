@@ -7,7 +7,7 @@
 ## 演示
 
 - [查看裁剪交互演示](docs/media/androidcropview-demo.mp4)
-- [下载 Demo APK](docs/releases/AndroidCropView-0.0.1.apk)
+- [下载 Demo APK](docs/releases/AndroidCropView.apk)
 
 AndroidCropView 是一个 Android 自定义图片裁剪 View，不依赖第三方裁剪控件。项目包含：
 
