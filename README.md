@@ -29,6 +29,8 @@ AndroidCropView is a custom Android image cropping view. It does not depend on a
 
 ## Module Setup
 
+### Local project dependency
+
 In `settings.gradle.kts`:
 
 ```kotlin
@@ -42,6 +44,31 @@ dependencies {
     implementation(project(":cropview"))
 }
 ```
+
+### JitPack dependency
+
+After pushing a tag or GitHub release, add JitPack to the consuming project:
+
+```kotlin
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
+```
+
+Then depend on the library module:
+
+```kotlin
+dependencies {
+    implementation("com.github.sceneren.AndroidCropView:cropview:<tag>")
+}
+```
+
+Replace `<tag>` with your Git tag or GitHub release version, for example `1.0.0`.
 
 ## XML Usage
 
@@ -163,4 +190,3 @@ The `:app` module includes a crop test screen that demonstrates:
 ```powershell
 .\gradlew.bat :app:assembleDebug
 ```
-
