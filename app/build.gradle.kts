@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
 }
 
 android {
@@ -32,13 +33,19 @@ android {
     }
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 }
 
 dependencies {
     implementation(project(":cropview"))
+    implementation(project(":cropview-compose"))
+    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)

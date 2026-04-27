@@ -12,11 +12,13 @@
 AndroidCropView is a custom Android image cropping view. It does not depend on a third-party crop widget. The project contains:
 
 - `:cropview`: a reusable Android library module.
+- `:cropview-compose`: a reusable Jetpack Compose library module.
 - `:app`: a sample app for testing local Uri, local File, and remote URL image cropping.
 
 ## Features
 
 - Custom `View` implementation for crop, rotate, zoom, drag, and fling.
+- Jetpack Compose implementation with the same crop state, gestures, shape masks, and bitmap export APIs.
 - Local image sources: `Uri`, `File`, `Bitmap`, and string paths.
 - Remote image source support through a caller-provided `CropImageLoader`.
 - Built-in crop shapes:
@@ -42,6 +44,7 @@ In `settings.gradle.kts`:
 
 ```kotlin
 include(":cropview")
+include(":cropview-compose")
 ```
 
 In your app module:
@@ -49,6 +52,7 @@ In your app module:
 ```kotlin
 dependencies {
     implementation(project(":cropview"))
+    implementation(project(":cropview-compose")) // For Compose UI.
 }
 ```
 
@@ -72,6 +76,7 @@ Then depend on the library module:
 ```kotlin
 dependencies {
     implementation("com.github.sceneren.AndroidCropView:cropview:<tag>")
+    implementation("com.github.sceneren.AndroidCropView:cropview-compose:<tag>") // For Compose UI.
 }
 ```
 
@@ -122,6 +127,35 @@ cropImageView.setCornerStyle(
 )
 
 val croppedBitmap = cropImageView.getCroppedBitmap()
+
+cropImageView.cropAndSaveToCache(object : CropSaveCallback {
+    override fun onCropSaveSuccess(result: CropSaveResult) {
+        val filePath = result.filePath
+    }
+
+    override fun onCropSaveError(error: Throwable) = Unit
+})
+```
+
+## Compose Usage
+
+```kotlin
+val cropState = rememberCropViewState()
+
+LaunchedEffect(uri) {
+    cropState.setImageSource(context, CropImageSource.fromUri(uri))
+}
+
+ImageCropper(
+    state = cropState,
+    modifier = Modifier.fillMaxSize(),
+)
+
+cropState.setCropShape(CropShape.Rectangle(16, 9))
+cropState.rotateBy(90f)
+val croppedBitmap = cropState.getCroppedBitmap()
+val saved = cropState.cropAndSaveToCache(context)
+val filePath = saved.filePath
 ```
 
 ## Image Sources
@@ -178,9 +212,10 @@ For custom bitmap masks, the bitmap alpha channel defines the visible crop windo
 ```kotlin
 val bitmap = cropImageView.getCroppedBitmap()
 val sizedBitmap = cropImageView.getCroppedBitmap(outputWidth = 1080, outputHeight = 1080)
+cropImageView.cropAndSaveToCache(callback)
 ```
 
-Non-rectangle shapes contain transparency, so save them as PNG or another alpha-preserving format.
+`cropAndSaveToCache` writes to `context.cacheDir/cropview` and returns the absolute file path through `CropSaveResult.filePath`. Rectangle crops are saved as JPEG; non-rectangle crops are saved as PNG to preserve transparency.
 
 ## Sample App
 
@@ -189,6 +224,7 @@ The `:app` module includes a crop test screen that demonstrates:
 - selecting a local image Uri
 - copying a selected image to a local File
 - loading a remote URL through Coil
+- using the `:cropview-compose` Compose crop screen
 - switching crop shapes
 - rotating, zooming, dragging, and fling
 

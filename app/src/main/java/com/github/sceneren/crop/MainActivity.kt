@@ -37,9 +37,10 @@ class MainActivity : AppCompatActivity() {
 
     private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
-            val croppedUri = result.data?.data
-            Log.d("PhotoPicker", "Cropped URI: $croppedUri")
-            ivCropped.load(croppedUri)
+            // Crop screens now return the private-cache file path instead of a Uri.
+            val croppedPath = result.data?.getStringExtra(CropActivity.EXTRA_RESULT_PATH)
+            Log.d("PhotoPicker", "Cropped path: $croppedPath")
+            ivCropped.load(croppedPath?.let(::File))
         }
     }
 
@@ -48,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCropFile: Button
     private lateinit var btnCropNetImage: Button
     private lateinit var btnCropCircle: Button
+    private lateinit var btnCropCompose: Button
     private lateinit var ivOriginal: ImageView
     private lateinit var ivCropped: ImageView
 
@@ -68,6 +70,7 @@ class MainActivity : AppCompatActivity() {
         btnCropFile = findViewById(R.id.btnCropFile)
         btnCropNetImage = findViewById(R.id.btnCropNetImage)
         btnCropCircle = findViewById(R.id.btnCropCircle)
+        btnCropCompose = findViewById(R.id.btnCropCompose)
         ivOriginal = findViewById(R.id.ivOriginal)
         ivCropped = findViewById(R.id.ivCropped)
 
@@ -85,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnCropCircle.setOnClickListener {
             cropSelectedCircle()
+        }
+        btnCropCompose.setOnClickListener {
+            cropSelectedWithCompose()
         }
     }
 
@@ -116,6 +122,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
         cropLauncher.launch(CropActivity.createIntent(this, uri, CropActivity.CROP_SHAPE_OVAL))
+    }
+
+    private fun cropSelectedWithCompose() {
+        val uri = originalUri
+        if (uri == null) {
+            Toast.makeText(this, R.string.pick_photo_first, Toast.LENGTH_SHORT).show()
+            return
+        }
+        cropLauncher.launch(ComposeCropActivity.createIntent(this, uri))
     }
 
     private fun persistReadPermission(uri: Uri) {

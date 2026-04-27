@@ -19,24 +19,19 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.ContentLoadingProgressBar
-import androidx.lifecycle.lifecycleScope
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
-import com.github.sceneren.crop.utils.getUriForFile
 import com.github.sceneren.cropview.Cancelable
 import com.github.sceneren.cropview.CropImageLoader
 import com.github.sceneren.cropview.CropImageSource
+import com.github.sceneren.cropview.CropSaveCallback
+import com.github.sceneren.cropview.CropSaveResult
 import com.github.sceneren.cropview.CropShape
 import com.github.sceneren.cropview.ImageCropView
 import com.github.sceneren.cropview.ImageLoadCallback
 import com.github.sceneren.cropview.ImageLoadRequest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
 
 class CropActivity : AppCompatActivity() {
 
@@ -46,6 +41,7 @@ class CropActivity : AppCompatActivity() {
         private const val EXTRA_NEED_COMPRESS = "need_compress"
 
         const val CROP_SHAPE_OVAL = "oval"
+        const val EXTRA_RESULT_PATH = "crop_result_path"
 
         fun createIntent(context: AppCompatActivity, uri: Uri, cropShape: String? = null, needCompress: Boolean = true): Intent {
             return Intent(context, CropActivity::class.java).apply {
@@ -245,35 +241,28 @@ class CropActivity : AppCompatActivity() {
 
     internal fun saveCroppedImage() {
         if (isSaving) return
-        val cropped = cropImageView.getCroppedBitmap()
-        if (cropped == null) {
-            Toast.makeText(this, getString(R.string.crop_no_image), Toast.LENGTH_SHORT).show()
-            return
-        }
         isSaving = true
         progressBar.show()
-        lifecycleScope.launch {
-            val uri = withContext(Dispatchers.IO) { writeBitmapToCache(cropped, cropImageView.requiresAlphaOutput()) }
-            progressBar.hide()
-            isSaving = false
-            Log.d("CropActivity", "Crop successful: $uri")
-            val intent = Intent().apply {
-                data = uri
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // The library now owns crop + private-cache persistence and returns an absolute file path.
+        cropImageView.cropAndSaveToCache(object : CropSaveCallback {
+            override fun onCropSaveSuccess(result: CropSaveResult) {
+                progressBar.hide()
+                isSaving = false
+                Log.d("CropActivity", "Crop successful: ${result.filePath}")
+                val intent = Intent().apply {
+                    putExtra(EXTRA_RESULT_PATH, result.filePath)
+                }
+                setResult(RESULT_OK, intent)
+                finish()
             }
-            setResult(RESULT_OK, intent)
-            finish()
-        }
-    }
 
-    private fun writeBitmapToCache(bitmap: Bitmap, keepAlpha: Boolean): Uri {
-        val extension = if (keepAlpha) "png" else "jpg"
-        val file = File(cacheDir, "crop_${System.currentTimeMillis()}.$extension")
-        FileOutputStream(file).use { output ->
-            val format = if (keepAlpha) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-            bitmap.compress(format, if (keepAlpha) 100 else 94, output)
-        }
-        return getUriForFile(this, file)
+            override fun onCropSaveError(error: Throwable) {
+                progressBar.hide()
+                isSaving = false
+                Log.e("CropActivity", "Crop save failed", error)
+                Toast.makeText(this@CropActivity, getString(R.string.crop_no_image), Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 
     private class CoilCropImageLoader(private val context: Context) : CropImageLoader {

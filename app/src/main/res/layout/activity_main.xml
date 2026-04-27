@@ -60,6 +60,12 @@
             android:layout_height="wrap_content"
             android:text="@string/crop_circle" />
 
+        <Button
+            android:id="@+id/btnCropCompose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/crop_with_compose" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

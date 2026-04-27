@@ -25,6 +25,7 @@ import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.RejectedExecutionException
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -346,6 +347,64 @@ class ImageCropView @JvmOverloads constructor(
         canvas.translate(-cropRect.left, -cropRect.top)
         canvas.drawBitmap(source, imageMatrix, bitmapPaint)
         return applyCropShapeMask(result)
+    }
+
+    /**
+     * 中文：按当前裁剪框尺寸裁剪并保存到应用私有缓存目录，成功回调返回文件绝对路径。
+     * English: Crops at the current frame size, saves into app-private cache, and returns an absolute file path.
+     */
+    @JvmOverloads
+    fun cropAndSaveToCache(
+        callback: CropSaveCallback,
+        filePrefix: String = DEFAULT_SAVE_FILE_PREFIX,
+        jpegQuality: Int = DEFAULT_JPEG_QUALITY,
+    ) {
+        val outputWidth = cropRect.width().roundToInt().coerceAtLeast(1)
+        val outputHeight = cropRect.height().roundToInt().coerceAtLeast(1)
+        cropAndSaveToCache(outputWidth, outputHeight, callback, filePrefix, jpegQuality)
+    }
+
+    /**
+     * 中文：按指定输出尺寸裁剪并保存；PNG/JPEG 选择由当前裁剪形状决定。
+     * English: Crops to the requested output size and chooses PNG/JPEG from the active crop shape.
+     */
+    @JvmOverloads
+    fun cropAndSaveToCache(
+        outputWidth: Int,
+        outputHeight: Int,
+        callback: CropSaveCallback,
+        filePrefix: String = DEFAULT_SAVE_FILE_PREFIX,
+        jpegQuality: Int = DEFAULT_JPEG_QUALITY,
+    ) {
+        val cropped = getCroppedBitmap(outputWidth, outputHeight)
+        if (cropped == null) {
+            postCropSaveError(callback, IllegalStateException("Image is not ready to crop."))
+            return
+        }
+
+        val appContext = context.applicationContext
+        val keepAlpha = requiresAlphaOutput()
+        try {
+            // Disk I/O runs on the existing single-thread executor; callbacks are marshalled to the main thread.
+            loadExecutor.submit {
+                try {
+                    val result = CropImageCacheSaver.saveToPrivateCache(
+                        context = appContext,
+                        bitmap = cropped,
+                        keepAlpha = keepAlpha,
+                        filePrefix = filePrefix,
+                        jpegQuality = jpegQuality,
+                    )
+                    mainHandler.post {
+                        callback.onCropSaveSuccess(result)
+                    }
+                } catch (error: Throwable) {
+                    postCropSaveError(callback, error)
+                }
+            }
+        } catch (error: RejectedExecutionException) {
+            postCropSaveError(callback, error)
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -1075,6 +1134,12 @@ class ImageCropView @JvmOverloads constructor(
         flingLastY = 0
     }
 
+    private fun postCropSaveError(callback: CropSaveCallback, error: Throwable) {
+        mainHandler.post {
+            callback.onCropSaveError(error)
+        }
+    }
+
     private fun readStyledAttributes(context: Context, attrs: AttributeSet?, defStyleAttr: Int) {
         val typedArray = context.obtainStyledAttributes(attrs, R.styleable.ImageCropView, defStyleAttr, 0)
         try {
@@ -1105,6 +1170,8 @@ class ImageCropView @JvmOverloads constructor(
         const val MAX_DECODED_LONG_EDGE = 12_000
         const val MAX_DECODED_PIXELS = 24_000_000
         const val DEFAULT_MAX_ZOOM_SCALE = 4f
+        const val DEFAULT_SAVE_FILE_PREFIX = "crop"
+        const val DEFAULT_JPEG_QUALITY = 94
     }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {

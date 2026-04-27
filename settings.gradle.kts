@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "AndroidCropView"
 include(":app")
 include(":cropview")
+include(":cropview-compose")
