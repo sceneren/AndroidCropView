@@ -16,8 +16,11 @@ import android.os.Looper
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.widget.OverScroller
+import androidx.core.graphics.createBitmap
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -26,8 +29,13 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import androidx.core.graphics.createBitmap
+import kotlin.math.sqrt
 
+/**
+ * 中文：自包含裁剪控件，负责图片加载、手势、裁剪框绘制、形状蒙版和 Bitmap 导出。
+ * English: A self-contained crop view that handles image loading, gestures, crop-frame drawing,
+ * shape masking, and bitmap export without depending on a third-party crop widget.
+ */
 class ImageCropView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -56,6 +64,83 @@ class ImageCropView @JvmOverloads constructor(
     }
 
     var imageLoadListener: ImageLoadListener? = null
+
+    /**
+     * 中文：控制矩形裁剪区域中是否绘制三分线。
+     * English: Controls whether the rule-of-thirds guide lines are drawn inside rectangle crops.
+     */
+    var showGridLines: Boolean = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /**
+     * 中文：控制是否绘制 L 形角标。
+     * English: Controls whether the L-shaped corner handles are drawn.
+     */
+    var showCornerHandles: Boolean = true
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /**
+     * 中文：为 false 时，拖动裁剪框边缘和角点会移动图片，而不是缩放裁剪框。
+     * English: When false, dragging crop-frame edges and corners moves the image instead of resizing the frame.
+     */
+    var cropFrameResizeEnabled: Boolean = true
+        set(value) {
+            field = value
+            if (!value && dragMode != DragMode.MOVE_IMAGE) {
+                dragMode = DragMode.NONE
+            }
+            invalidate()
+        }
+
+    /**
+     * 中文：可见角标使用的颜色。
+     * English: Color used for the visible corner handles.
+     */
+    var cornerColor: Int = Color.WHITE
+        set(value) {
+            field = value
+            handlePaint.color = value
+            invalidate()
+        }
+
+    /**
+     * 中文：可见角标使用的线宽，单位为像素。
+     * English: Stroke width, in pixels, used for the visible corner handles.
+     */
+    var cornerStrokeWidth: Float = 4f.dp()
+        set(value) {
+            field = value.coerceAtLeast(0f)
+            handlePaint.strokeWidth = field
+            invalidate()
+        }
+
+    /**
+     * 中文：每段可见角标的长度，单位为像素。
+     * English: Length, in pixels, of each visible corner-handle segment.
+     */
+    var cornerLength: Float = 28f.dp()
+        set(value) {
+            field = value.coerceAtLeast(0f)
+            invalidate()
+        }
+
+    /**
+     * 中文：相对初始铺满裁剪框状态的最大放大倍数，默认 4.0，最小值为 1。
+     * English: Maximum zoom multiplier relative to the initial crop-covering scale. Default is 4.0. Minimum is 1.
+     */
+    var maxZoomScale: Float = DEFAULT_MAX_ZOOM_SCALE
+        set(value) {
+            val normalized = if (value.isNaN() || value.isInfinite()) DEFAULT_MAX_ZOOM_SCALE else value
+            field = normalized.coerceAtLeast(1f)
+            clampImageScaleToMax()
+            invalidate()
+        }
 
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -93,12 +178,15 @@ class ImageCropView @JvmOverloads constructor(
     private val contentRect = RectF()
 
     private val minCropSize = 96f.dp()
-    private val handleSize = 28f.dp()
     private val edgeSlop = 28f.dp()
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val viewConfiguration = ViewConfiguration.get(context)
+    private val touchSlop = viewConfiguration.scaledTouchSlop
+    private val minFlingVelocity = viewConfiguration.scaledMinimumFlingVelocity
+    private val maxFlingVelocity = viewConfiguration.scaledMaximumFlingVelocity
     private val mainHandler = Handler(Looper.getMainLooper())
     private val loadExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val scaleDetector = ScaleGestureDetector(context, ScaleListener())
+    private val flingScroller = OverScroller(context)
 
     private var bitmap: Bitmap? = null
     private var localLoadFuture: Future<*>? = null
@@ -108,13 +196,24 @@ class ImageCropView @JvmOverloads constructor(
     private var lastX = 0f
     private var lastY = 0f
     private var movedPastSlop = false
+    private var velocityTracker: VelocityTracker? = null
+    private var canFlingImage = false
+    private var flingLastX = 0
+    private var flingLastY = 0
+    private var baseImageScale = 1f
+    private val matrixValues = FloatArray(9)
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null)
         isFocusable = true
         isClickable = true
+        readStyledAttributes(context, attrs, defStyleAttr)
     }
 
+    /**
+     * 中文：加载本地 Uri、本地 File、原始 Bitmap 或远程 URL；远程 URL 需要调用方提供加载器。
+     * English: Loads a local uri/file, raw bitmap, or remote url. Remote urls require a caller-supplied loader.
+     */
     fun setImageSource(source: CropImageSource, imageLoader: CropImageLoader? = null) {
         cancelCurrentLoad()
         imageLoadListener?.onLoadStart()
@@ -133,56 +232,110 @@ class ImageCropView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * 中文：把已经解码好的 Bitmap 设置为裁剪源。
+     * English: Sets an already decoded bitmap as the crop source.
+     */
     fun setImageBitmap(bitmap: Bitmap) {
         cancelCurrentLoad()
         setImageBitmapInternal(bitmap)
     }
 
+    /**
+     * 中文：设置当前裁剪形状，并根据该形状的宽高比重新计算裁剪框。
+     * English: Sets the active crop shape and recalculates the crop frame for that shape's aspect ratio.
+     */
     fun setCropShape(shape: CropShape) {
+        stopFling()
         cropShape = shape
         initCropRect()
         ensureImageCoversCrop()
         invalidate()
     }
 
+    /**
+     * 中文：设置固定宽高比矩形裁剪的便捷 API。
+     * English: Convenience API for a rectangle crop with a fixed aspect ratio.
+     */
     fun setAspectRatio(width: Int, height: Int) {
         setCropShape(CropShape.Rectangle(width, height))
     }
 
+    /**
+     * 中文：使用可自由缩放的矩形裁剪框。
+     * English: Uses a free-size rectangle crop frame.
+     */
     fun clearAspectRatio() {
         setCropShape(CropShape.Rectangle())
     }
 
+    /**
+     * 中文：更新可见角标样式。
+     * English: Updates the visible corner-handle style.
+     */
+    fun setCornerStyle(color: Int, strokeWidth: Float, length: Float) {
+        cornerColor = color
+        cornerStrokeWidth = strokeWidth
+        cornerLength = length
+    }
+
+    /**
+     * 中文：非矩形裁剪需要使用 PNG 等保留透明通道的输出格式。
+     * English: Non-rectangle crops need alpha-preserving output formats such as PNG.
+     */
     fun requiresAlphaOutput(): Boolean {
         return cropShape !is CropShape.Rectangle
     }
 
+    /**
+     * 中文：围绕裁剪框中心旋转图片。
+     * English: Rotates the image around the crop frame center.
+     */
     fun rotateBy(degrees: Float) {
         if (bitmap == null || cropRect.isEmpty) return
+        stopFling()
         imageMatrix.postRotate(degrees, cropRect.centerX(), cropRect.centerY())
         ensureImageCoversCrop()
         invalidate()
     }
 
+    /**
+     * 中文：围绕裁剪框中心缩放图片，并保持图片覆盖完整裁剪框。
+     * English: Scales the image around the crop frame center and keeps the crop frame covered.
+     */
     fun zoomBy(factor: Float) {
         if (bitmap == null || cropRect.isEmpty || factor <= 0f) return
-        imageMatrix.postScale(factor, factor, cropRect.centerX(), cropRect.centerY())
+        stopFling()
+        scaleImageBy(factor, cropRect.centerX(), cropRect.centerY())
         ensureImageCoversCrop()
         invalidate()
     }
 
+    /**
+     * 中文：恢复初始裁剪框和图片变换。
+     * English: Restores the initial crop frame and image transform.
+     */
     fun resetImage() {
         if (bitmap == null || width == 0 || height == 0) return
+        stopFling()
         configureInitialState()
         invalidate()
     }
 
+    /**
+     * 中文：按当前屏幕上的裁剪框尺寸导出 Bitmap。
+     * English: Exports a bitmap using the current on-screen crop-frame size.
+     */
     fun getCroppedBitmap(): Bitmap? {
         val outputWidth = cropRect.width().roundToInt().coerceAtLeast(1)
         val outputHeight = cropRect.height().roundToInt().coerceAtLeast(1)
         return getCroppedBitmap(outputWidth, outputHeight)
     }
 
+    /**
+     * 中文：按指定输出尺寸导出 Bitmap，并应用当前裁剪形状作为蒙版。
+     * English: Exports a bitmap with the requested output size and applies the active crop shape as a mask.
+     */
     fun getCroppedBitmap(outputWidth: Int, outputHeight: Int): Bitmap? {
         val source = bitmap ?: return null
         if (cropRect.isEmpty || outputWidth <= 0 || outputHeight <= 0) return null
@@ -214,17 +367,27 @@ class ImageCropView @JvmOverloads constructor(
         if (!isEnabled || bitmap == null) return true
 
         scaleDetector.onTouchEvent(event)
+        velocityTracker?.addMovement(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                stopFling()
+                velocityTracker?.recycle()
+                velocityTracker = VelocityTracker.obtain().apply { addMovement(event) }
                 parent?.requestDisallowInterceptTouchEvent(true)
                 dragMode = findDragMode(event.x, event.y)
+                canFlingImage = dragMode == DragMode.MOVE_IMAGE
                 lastX = event.x
                 lastY = event.y
                 movedPastSlop = false
                 return true
             }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                canFlingImage = false
+                return true
+            }
             MotionEvent.ACTION_MOVE -> {
                 if (scaleDetector.isInProgress || event.pointerCount > 1) {
+                    canFlingImage = false
                     lastX = event.x
                     lastY = event.y
                     return true
@@ -243,6 +406,15 @@ class ImageCropView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_CANCEL -> {
+                if (event.actionMasked == MotionEvent.ACTION_UP && canFlingImage && movedPastSlop) {
+                    velocityTracker?.let { tracker ->
+                        tracker.computeCurrentVelocity(1000, maxFlingVelocity.toFloat())
+                        startImageFling(tracker.xVelocity, tracker.yVelocity)
+                    }
+                }
+                velocityTracker?.recycle()
+                velocityTracker = null
+                canFlingImage = false
                 parent?.requestDisallowInterceptTouchEvent(false)
                 dragMode = DragMode.NONE
                 return true
@@ -251,8 +423,22 @@ class ImageCropView @JvmOverloads constructor(
         return true
     }
 
+    override fun computeScroll() {
+        if (flingScroller.computeScrollOffset()) {
+            val dx = (flingScroller.currX - flingLastX).toFloat()
+            val dy = (flingScroller.currY - flingLastY).toFloat()
+            flingLastX = flingScroller.currX
+            flingLastY = flingScroller.currY
+            imageMatrix.postTranslate(dx, dy)
+            ensureImageCoversCrop()
+            postInvalidateOnAnimation()
+        }
+    }
+
     override fun onDetachedFromWindow() {
         cancelCurrentLoad()
+        velocityTracker?.recycle()
+        velocityTracker = null
         loadExecutor.shutdownNow()
         super.onDetachedFromWindow()
     }
@@ -282,6 +468,10 @@ class ImageCropView @JvmOverloads constructor(
         )
     }
 
+    /**
+     * 中文：在 UI 线程外解码本地图片源，并忽略设置新图片源之前的过期结果。
+     * English: Decodes local sources away from the UI thread and ignores stale results after a new source is set.
+     */
     private fun loadLocalImage(decode: () -> Bitmap) {
         var future: Future<*>? = null
         future = loadExecutor.submit {
@@ -305,6 +495,7 @@ class ImageCropView @JvmOverloads constructor(
     }
 
     internal fun setImageBitmapInternal(nextBitmap: Bitmap) {
+        stopFling()
         bitmap = nextBitmap
         bitmapBounds.set(0f, 0f, nextBitmap.width.toFloat(), nextBitmap.height.toFloat())
         if (width > 0 && height > 0) {
@@ -313,12 +504,20 @@ class ImageCropView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * 中文：当新 Bitmap 或 View 尺寸可用时，初始化裁剪框和图片矩阵。
+     * English: Initializes both the crop frame and image matrix when a new bitmap or view size is available.
+     */
     private fun configureInitialState() {
         updateContentRect()
         initCropRect()
         fitImageToCrop()
     }
 
+    /**
+     * 中文：内容区域会排除调用方设置的 padding。
+     * English: Content bounds exclude any padding applied by callers.
+     */
     private fun updateContentRect() {
         contentRect.set(
             paddingLeft.toFloat(),
@@ -328,6 +527,10 @@ class ImageCropView @JvmOverloads constructor(
         )
     }
 
+    /**
+     * 中文：在 View 中心放置一个合理的初始裁剪框。
+     * English: Places a sensible initial crop frame in the center of the view.
+     */
     private fun initCropRect() {
         if (width == 0 || height == 0) return
         updateContentRect()
@@ -357,6 +560,10 @@ class ImageCropView @JvmOverloads constructor(
         cropRect.set(left, top, left + cropWidth, top + cropHeight)
     }
 
+    /**
+     * 中文：调整图片位置和缩放，使当前裁剪框被完整覆盖。
+     * English: Fits the image so the active crop frame is fully covered.
+     */
     private fun fitImageToCrop() {
         val source = bitmap ?: return
         if (cropRect.isEmpty) return
@@ -364,12 +571,17 @@ class ImageCropView @JvmOverloads constructor(
         val scale = max(cropRect.width() / bitmapBounds.width(), cropRect.height() / bitmapBounds.height())
         val dx = cropRect.centerX() - bitmapBounds.centerX() * scale
         val dy = cropRect.centerY() - bitmapBounds.centerY() * scale
+        baseImageScale = scale
         imageMatrix.reset()
         imageMatrix.postScale(scale, scale)
         imageMatrix.postTranslate(dx, dy)
         ensureImageCoversCrop()
     }
 
+    /**
+     * 中文：保持图片足够大且位置合适，避免裁剪框内出现空白像素。
+     * English: Keeps the image large enough and positioned so no empty pixels appear inside the crop frame.
+     */
     internal fun ensureImageCoversCrop() {
         if (bitmap == null || cropRect.isEmpty) return
         val mapped = mappedBitmapRect()
@@ -407,6 +619,10 @@ class ImageCropView @JvmOverloads constructor(
         return imageBounds
     }
 
+    /**
+     * 中文：根据当前命中区域，把拖动分发给图片移动或裁剪框缩放。
+     * English: Dispatches a drag either to image movement or crop-frame resizing.
+     */
     private fun handleDrag(x: Float, y: Float, dx: Float, dy: Float) {
         when (dragMode) {
             DragMode.MOVE_IMAGE -> {
@@ -427,6 +643,10 @@ class ImageCropView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * 中文：通过当前激活的边或角缩放自由比例矩形。
+     * English: Resizes a free-aspect rectangle by the active edge or corner.
+     */
     private fun resizeFreeCrop(dx: Float, dy: Float) {
         val next = RectF(cropRect)
         when (dragMode) {
@@ -479,6 +699,10 @@ class ImageCropView @JvmOverloads constructor(
         cropRect.set(next)
     }
 
+    /**
+     * 中文：在保持中心点不变的情况下缩放固定比例裁剪框。
+     * English: Resizes a fixed-aspect crop frame while preserving its center.
+     */
     private fun resizeFixedCrop(dx: Float, dy: Float) {
         val ratio = activeAspectRatio() ?: return
         val centerX = cropRect.centerX()
@@ -526,6 +750,10 @@ class ImageCropView @JvmOverloads constructor(
         cropRect.set(centerX - nextWidth / 2f, centerY - nextHeight / 2f, centerX + nextWidth / 2f, centerY + nextHeight / 2f)
     }
 
+    /**
+     * 中文：防止裁剪框编辑后超出 View 的内容区域。
+     * English: Prevents crop-frame edits from moving outside this view's content bounds.
+     */
     private fun ensureCropInsideContent() {
         var dx = 0f
         var dy = 0f
@@ -536,7 +764,14 @@ class ImageCropView @JvmOverloads constructor(
         cropRect.offset(dx, dy)
     }
 
+    /**
+     * 中文：启用裁剪框缩放时，边和角用于缩放裁剪框；其他位置用于拖动图片。
+     * English: Edges and corners resize the frame when enabled; every other point drags the image.
+     */
     private fun findDragMode(x: Float, y: Float): DragMode {
+        if (!cropFrameResizeEnabled) {
+            return DragMode.MOVE_IMAGE
+        }
         val nearLeft = abs(x - cropRect.left) <= edgeSlop
         val nearRight = abs(x - cropRect.right) <= edgeSlop
         val nearTop = abs(y - cropRect.top) <= edgeSlop
@@ -554,10 +789,14 @@ class ImageCropView @JvmOverloads constructor(
             nearTop && insideHorizontal -> DragMode.TOP
             nearBottom && insideHorizontal -> DragMode.BOTTOM
             cropRect.contains(x, y) -> DragMode.MOVE_IMAGE
-            else -> DragMode.NONE
+            else -> DragMode.MOVE_IMAGE
         }
     }
 
+    /**
+     * 中文：绘制裁剪区域外的遮罩、可选参考线、边框和角标。
+     * English: Draws the dimmed outside area, optional guide lines, border, and corner handles.
+     */
     private fun drawOverlay(canvas: Canvas) {
         if (cropRect.isEmpty) return
         val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
@@ -565,7 +804,7 @@ class ImageCropView @JvmOverloads constructor(
         drawClearCropShape(canvas)
         canvas.restoreToCount(layer)
 
-        if (cropShape is CropShape.Rectangle) {
+        if (showGridLines && cropShape is CropShape.Rectangle) {
             val thirdWidth = cropRect.width() / 3f
             val thirdHeight = cropRect.height() / 3f
             for (i in 1..2) {
@@ -576,9 +815,15 @@ class ImageCropView @JvmOverloads constructor(
             }
         }
         drawShapeGuide(canvas)
-        drawHandles(canvas)
+        if (showCornerHandles) {
+            drawHandles(canvas)
+        }
     }
 
+    /**
+     * 中文：从遮罩层中扣出裁剪窗口；Bitmap 蒙版使用 alpha 扣出自定义形状。
+     * English: Clears the crop window from the overlay. Bitmap masks use alpha to punch through custom shapes.
+     */
     private fun drawClearCropShape(canvas: Canvas) {
         when (val shape = cropShape) {
             is CropShape.Rectangle -> canvas.drawRect(cropRect, clearPaint)
@@ -587,6 +832,10 @@ class ImageCropView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * 中文：绘制当前形状的可见裁剪框轮廓。
+     * English: Draws the visible crop-frame outline for the current shape.
+     */
     private fun drawShapeGuide(canvas: Canvas) {
         when (val shape = cropShape) {
             is CropShape.Rectangle -> canvas.drawRect(cropRect, borderPaint)
@@ -597,6 +846,10 @@ class ImageCropView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * 中文：为导出的 Bitmap 应用非矩形输出蒙版。
+     * English: Applies non-rectangle output masks to the exported bitmap.
+     */
     private fun applyCropShapeMask(source: Bitmap): Bitmap {
         val shape = cropShape
         if (shape is CropShape.Rectangle) return source
@@ -616,12 +869,16 @@ class ImageCropView @JvmOverloads constructor(
         return output
     }
 
+    /**
+     * 中文：绘制 L 形角标。
+     * English: Draws L-shaped corner handles.
+     */
     private fun drawHandles(canvas: Canvas) {
         val l = cropRect.left
         val t = cropRect.top
         val r = cropRect.right
         val b = cropRect.bottom
-        val size = handleSize
+        val size = cornerLength
         canvas.drawLine(l, t, l + size, t, handlePaint)
         canvas.drawLine(l, t, l, t + size, handlePaint)
         canvas.drawLine(r, t, r - size, t, handlePaint)
@@ -632,6 +889,10 @@ class ImageCropView @JvmOverloads constructor(
         canvas.drawLine(r, b, r, b - size, handlePaint)
     }
 
+    /**
+     * 中文：读取 content Uri 两次：第一次读取尺寸，第二次解码采样后的 Bitmap。
+     * English: Reads a content uri twice: first for dimensions, then for the sampled bitmap.
+     */
     private fun decodeUri(uri: android.net.Uri, requestedWidth: Int, requestedHeight: Int): Bitmap {
         val resolver = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -645,6 +906,10 @@ class ImageCropView @JvmOverloads constructor(
         } ?: throw IllegalArgumentException("Unable to open image uri: $uri")
     }
 
+    /**
+     * 中文：使用与 Uri 图片源相同的采样限制解码文件路径。
+     * English: Decodes a file path with the same sampling limits as uri sources.
+     */
     private fun decodeFile(file: File, requestedWidth: Int, requestedHeight: Int): Bitmap {
         if (!file.exists()) {
             throw IllegalArgumentException("Image file does not exist: ${file.absolutePath}")
@@ -659,21 +924,24 @@ class ImageCropView @JvmOverloads constructor(
             ?: throw IllegalArgumentException("Unable to decode image file: ${file.absolutePath}")
     }
 
+    /**
+     * 中文：限制解码后的长边和总像素数，保证超长图仍然可绘制。
+     * English: Caps decoded long-edge and total pixel count so very tall images remain drawable.
+     */
     private fun calculateInSampleSize(options: BitmapFactory.Options, requestedWidth: Int, requestedHeight: Int): Int {
         val sourceHeight = options.outHeight
         val sourceWidth = options.outWidth
         if (sourceHeight <= 0 || sourceWidth <= 0) return 1
         var inSampleSize = 1
-        val targetWidth = max(requestedWidth, 2048)
-        val targetHeight = max(requestedHeight, 2048)
-        if (sourceHeight > targetHeight || sourceWidth > targetWidth) {
-            var halfHeight = sourceHeight / 2
-            var halfWidth = sourceWidth / 2
-            while (halfHeight / inSampleSize >= targetHeight && halfWidth / inSampleSize >= targetWidth) {
-                inSampleSize *= 2
-                halfHeight /= 2
-                halfWidth /= 2
-            }
+        while (true) {
+            val sampledWidth = sourceWidth / inSampleSize
+            val sampledHeight = sourceHeight / inSampleSize
+            val sampledPixels = sampledWidth.toLong() * sampledHeight.toLong()
+            val shouldSample = sampledWidth > MAX_DECODED_LONG_EDGE ||
+                sampledHeight > MAX_DECODED_LONG_EDGE ||
+                sampledPixels > MAX_DECODED_PIXELS
+            if (!shouldSample) break
+            inSampleSize *= 2
         }
         return inSampleSize.coerceAtLeast(1)
     }
@@ -682,7 +950,12 @@ class ImageCropView @JvmOverloads constructor(
 
     private fun requestedDecodeHeight(): Int = (height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels) * 2
 
+    /**
+     * 中文：在切换图片源或 View 分离前，取消当前本地或远程加载任务。
+     * English: Cancels any active local or remote load before changing sources or detaching.
+     */
     private fun cancelCurrentLoad() {
+        stopFling()
         localLoadFuture?.cancel(true)
         localLoadFuture = null
         remoteLoad?.cancel()
@@ -691,12 +964,153 @@ class ImageCropView @JvmOverloads constructor(
 
     private fun activeAspectRatio(): Float? = cropShape.aspectRatio
 
+    /**
+     * 中文：按最大放大倍数限制缩放因子，并围绕指定中心点缩放图片。
+     * English: Limits the requested scale factor by max zoom, then scales around the given pivot.
+     */
+    private fun scaleImageBy(factor: Float, pivotX: Float, pivotY: Float) {
+        val constrainedFactor = constrainScaleFactor(factor)
+        if (constrainedFactor == 1f) return
+        imageMatrix.postScale(constrainedFactor, constrainedFactor, pivotX, pivotY)
+    }
+
+    /**
+     * 中文：计算在最大放大倍数内允许执行的实际缩放因子。
+     * English: Computes the actual scale factor allowed by the configured max zoom.
+     */
+    private fun constrainScaleFactor(factor: Float): Float {
+        if (factor <= 1f) return factor
+        val currentScale = currentImageScale()
+        val maxScale = baseImageScale * maxZoomScale
+        if (currentScale <= 0f || maxScale <= 0f) return factor
+        val remainingFactor = maxScale / currentScale
+        return when {
+            remainingFactor <= 1f -> 1f
+            else -> min(factor, remainingFactor)
+        }
+    }
+
+    /**
+     * 中文：当最大放大倍数变小时，把当前图片缩放回允许范围内。
+     * English: Scales the current image back into range when the max zoom setting is reduced.
+     */
+    private fun clampImageScaleToMax() {
+        if (bitmap == null || cropRect.isEmpty) return
+        val currentScale = currentImageScale()
+        val maxScale = baseImageScale * maxZoomScale
+        if (currentScale <= maxScale || currentScale <= 0f || maxScale <= 0f) return
+        imageMatrix.postScale(maxScale / currentScale, maxScale / currentScale, cropRect.centerX(), cropRect.centerY())
+        ensureImageCoversCrop()
+    }
+
+    /**
+     * 中文：读取矩阵中的统一缩放值；旋转后通过 scale/skew 组合计算。
+     * English: Reads the uniform matrix scale, using scale/skew values so rotated images are handled.
+     */
+    private fun currentImageScale(): Float {
+        imageMatrix.getValues(matrixValues)
+        val scaleX = matrixValues[Matrix.MSCALE_X]
+        val skewY = matrixValues[Matrix.MSKEW_Y]
+        return sqrt(scaleX * scaleX + skewY * skewY)
+    }
+
+    /**
+     * 中文：在当前裁剪覆盖边界内启动图片惯性滑动。
+     * English: Starts inertial image movement within the current crop coverage limits.
+     */
+    private fun startImageFling(xVelocity: Float, yVelocity: Float) {
+        if (abs(xVelocity) < minFlingVelocity && abs(yVelocity) < minFlingVelocity) return
+
+        val mapped = mappedBitmapRect()
+        val minDeltaX: Int
+        val maxDeltaX: Int
+        if (mapped.width() > cropRect.width()) {
+            minDeltaX = (cropRect.right - mapped.right).roundToInt()
+            maxDeltaX = (cropRect.left - mapped.left).roundToInt()
+        } else {
+            minDeltaX = 0
+            maxDeltaX = 0
+        }
+
+        val minDeltaY: Int
+        val maxDeltaY: Int
+        if (mapped.height() > cropRect.height()) {
+            minDeltaY = (cropRect.bottom - mapped.bottom).roundToInt()
+            maxDeltaY = (cropRect.top - mapped.top).roundToInt()
+        } else {
+            minDeltaY = 0
+            maxDeltaY = 0
+        }
+
+        if (minDeltaX == 0 && maxDeltaX == 0 && minDeltaY == 0 && maxDeltaY == 0) return
+
+        val velocityX = if (minDeltaX == 0 && maxDeltaX == 0) 0 else xVelocity.roundToInt()
+        val velocityY = if (minDeltaY == 0 && maxDeltaY == 0) 0 else yVelocity.roundToInt()
+        if (velocityX == 0 && velocityY == 0) return
+
+        flingLastX = 0
+        flingLastY = 0
+        flingScroller.fling(
+            0,
+            0,
+            velocityX,
+            velocityY,
+            minDeltaX,
+            maxDeltaX,
+            minDeltaY,
+            maxDeltaY,
+        )
+        postInvalidateOnAnimation()
+    }
+
+    /**
+     * 中文：在用户直接操作或 API 触发变换前，停止当前惯性滑动。
+     * English: Stops active inertial movement before direct user or API-driven transforms.
+     */
+    private fun stopFling() {
+        if (!flingScroller.isFinished) {
+            flingScroller.abortAnimation()
+        }
+        flingLastX = 0
+        flingLastY = 0
+    }
+
+    private fun readStyledAttributes(context: Context, attrs: AttributeSet?, defStyleAttr: Int) {
+        val typedArray = context.obtainStyledAttributes(attrs, R.styleable.ImageCropView, defStyleAttr, 0)
+        try {
+            showGridLines = typedArray.getBoolean(R.styleable.ImageCropView_icv_showGridLines, showGridLines)
+            showCornerHandles = typedArray.getBoolean(
+                R.styleable.ImageCropView_icv_showCornerHandles,
+                showCornerHandles,
+            )
+            cropFrameResizeEnabled = typedArray.getBoolean(
+                R.styleable.ImageCropView_icv_cropFrameResizeEnabled,
+                cropFrameResizeEnabled,
+            )
+            cornerColor = typedArray.getColor(R.styleable.ImageCropView_icv_cornerColor, cornerColor)
+            cornerStrokeWidth = typedArray.getDimension(
+                R.styleable.ImageCropView_icv_cornerStrokeWidth,
+                cornerStrokeWidth,
+            )
+            cornerLength = typedArray.getDimension(R.styleable.ImageCropView_icv_cornerLength, cornerLength)
+            maxZoomScale = typedArray.getFloat(R.styleable.ImageCropView_icv_maxZoomScale, maxZoomScale)
+        } finally {
+            typedArray.recycle()
+        }
+    }
+
     private fun Float.dp(): Float = this * resources.displayMetrics.density
+
+    private companion object {
+        const val MAX_DECODED_LONG_EDGE = 12_000
+        const val MAX_DECODED_PIXELS = 24_000_000
+        const val DEFAULT_MAX_ZOOM_SCALE = 4f
+    }
 
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             val factor = detector.scaleFactor.coerceIn(0.85f, 1.18f)
-            imageMatrix.postScale(factor, factor, detector.focusX, detector.focusY)
+            scaleImageBy(factor, detector.focusX, detector.focusY)
             ensureImageCoversCrop()
             invalidate()
             return true

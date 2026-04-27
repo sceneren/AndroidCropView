@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ImageCropView">
+        <!-- 中文：是否显示裁剪区域中的参考线，默认 true。 English: Whether to show guide lines inside the crop area. Default: true. -->
+        <attr name="icv_showGridLines" format="boolean" />
+        <!-- 中文：是否显示裁剪框角标，默认 true。 English: Whether to show crop-frame corner handles. Default: true. -->
+        <attr name="icv_showCornerHandles" format="boolean" />
+        <!-- 中文：是否允许拖动边和角缩放裁剪框，默认 true。 English: Whether edge and corner drags can resize the crop frame. Default: true. -->
+        <attr name="icv_cropFrameResizeEnabled" format="boolean" />
+        <!-- 中文：角标颜色，默认 white。 English: Corner-handle color. Default: white. -->
+        <attr name="icv_cornerColor" format="color" />
+        <!-- 中文：角标线宽，默认 4dp。 English: Corner-handle stroke width. Default: 4dp. -->
+        <attr name="icv_cornerStrokeWidth" format="dimension" />
+        <!-- 中文：角标长度，默认 28dp。 English: Corner-handle length. Default: 28dp. -->
+        <attr name="icv_cornerLength" format="dimension" />
+        <!-- 中文：相对初始铺满裁剪框状态的最大放大倍数，默认 4.0。 English: Maximum zoom multiplier relative to the initial crop-covering scale. Default: 4.0. -->
+        <attr name="icv_maxZoomScale" format="float" />
+    </declare-styleable>
+</resources>
