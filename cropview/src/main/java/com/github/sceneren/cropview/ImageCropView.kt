@@ -1,5 +1,6 @@
 package com.github.sceneren.cropview
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -8,7 +9,6 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.os.Handler
@@ -26,6 +26,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
 
 class ImageCropView @JvmOverloads constructor(
     context: Context,
@@ -80,9 +81,8 @@ class ImageCropView @JvmOverloads constructor(
     private val clearPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
-    private val maskGuidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        alpha = 70
-        colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+    private val maskClearPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
     }
 
     private val imageMatrix = Matrix()
@@ -186,7 +186,7 @@ class ImageCropView @JvmOverloads constructor(
     fun getCroppedBitmap(outputWidth: Int, outputHeight: Int): Bitmap? {
         val source = bitmap ?: return null
         if (cropRect.isEmpty || outputWidth <= 0 || outputHeight <= 0) return null
-        val result = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
+        val result = createBitmap(outputWidth, outputHeight)
         val canvas = Canvas(result)
         canvas.drawColor(Color.TRANSPARENT)
         canvas.scale(outputWidth / cropRect.width(), outputHeight / cropRect.height())
@@ -209,6 +209,7 @@ class ImageCropView @JvmOverloads constructor(
         drawOverlay(canvas)
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!isEnabled || bitmap == null) return true
 
@@ -303,7 +304,7 @@ class ImageCropView @JvmOverloads constructor(
         localLoadFuture = future
     }
 
-    private fun setImageBitmapInternal(nextBitmap: Bitmap) {
+    internal fun setImageBitmapInternal(nextBitmap: Bitmap) {
         bitmap = nextBitmap
         bitmapBounds.set(0f, 0f, nextBitmap.width.toFloat(), nextBitmap.height.toFloat())
         if (width > 0 && height > 0) {
@@ -369,7 +370,7 @@ class ImageCropView @JvmOverloads constructor(
         ensureImageCoversCrop()
     }
 
-    private fun ensureImageCoversCrop() {
+    internal fun ensureImageCoversCrop() {
         if (bitmap == null || cropRect.isEmpty) return
         val mapped = mappedBitmapRect()
         if (mapped.width() <= 0f || mapped.height() <= 0f) return
@@ -582,7 +583,7 @@ class ImageCropView @JvmOverloads constructor(
         when (val shape = cropShape) {
             is CropShape.Rectangle -> canvas.drawRect(cropRect, clearPaint)
             CropShape.Circle -> canvas.drawOval(cropRect, clearPaint)
-            is CropShape.BitmapMask -> canvas.drawBitmap(shape.bitmap, null, cropRect, clearPaint)
+            is CropShape.BitmapMask -> canvas.drawBitmap(shape.bitmap, null, cropRect, maskClearPaint)
         }
     }
 
@@ -591,7 +592,6 @@ class ImageCropView @JvmOverloads constructor(
             is CropShape.Rectangle -> canvas.drawRect(cropRect, borderPaint)
             CropShape.Circle -> canvas.drawOval(cropRect, borderPaint)
             is CropShape.BitmapMask -> {
-                canvas.drawBitmap(shape.bitmap, null, cropRect, maskGuidePaint)
                 canvas.drawRect(cropRect, borderPaint)
             }
         }
@@ -601,14 +601,14 @@ class ImageCropView @JvmOverloads constructor(
         val shape = cropShape
         if (shape is CropShape.Rectangle) return source
 
-        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val output = createBitmap(source.width, source.height)
         val canvas = Canvas(output)
         val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         val outputRect = RectF(0f, 0f, source.width.toFloat(), source.height.toFloat())
         when (shape) {
             CropShape.Circle -> canvas.drawOval(outputRect, maskPaint)
             is CropShape.BitmapMask -> canvas.drawBitmap(shape.bitmap, null, outputRect, maskPaint)
-            is CropShape.Rectangle -> Unit
+            else -> Unit
         }
         maskPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
         canvas.drawBitmap(source, 0f, 0f, maskPaint)

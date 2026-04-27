@@ -3,10 +3,6 @@ package com.github.sceneren.crop
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -18,6 +14,8 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.ContentLoadingProgressBar
@@ -39,9 +37,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 class CropActivity : AppCompatActivity() {
 
@@ -214,20 +209,24 @@ class CropActivity : AppCompatActivity() {
                 cropImageView.setCropShape(CropShape.Rectangle())
                 tvStatus.text = getString(R.string.crop_status_rect_free)
             }
+
             ShapeMode.RECT_SQUARE -> {
                 cropImageView.setCropShape(CropShape.Rectangle(1, 1))
                 tvStatus.text = getString(R.string.crop_status_rect_square)
             }
+
             ShapeMode.RECT_WIDE -> {
                 cropImageView.setCropShape(CropShape.Rectangle(16, 9))
                 tvStatus.text = getString(R.string.crop_status_rect_wide)
             }
+
             ShapeMode.CIRCLE -> {
                 cropImageView.setCropShape(CropShape.Circle)
                 tvStatus.text = getString(R.string.crop_status_circle)
             }
+
             ShapeMode.STAR -> {
-                val mask = starMask ?: createStarMask().also { starMask = it }
+                val mask = starMask ?: createStartBitmap().also { starMask = it }
                 cropImageView.setCropShape(CropShape.BitmapMask(mask))
                 tvStatus.text = getString(R.string.crop_status_star)
             }
@@ -277,33 +276,6 @@ class CropActivity : AppCompatActivity() {
         return getUriForFile(this, file)
     }
 
-    private fun createStarMask(size: Int = 640): Bitmap {
-        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
-        }
-        val path = Path()
-        val center = size / 2f
-        val outerRadius = size * 0.45f
-        val innerRadius = size * 0.2f
-        for (i in 0 until 10) {
-            val radius = if (i % 2 == 0) outerRadius else innerRadius
-            val angle = -PI / 2.0 + i * PI / 5.0
-            val x = center + cos(angle).toFloat() * radius
-            val y = center + sin(angle).toFloat() * radius
-            if (i == 0) {
-                path.moveTo(x, y)
-            } else {
-                path.lineTo(x, y)
-            }
-        }
-        path.close()
-        canvas.drawPath(path, paint)
-        return output
-    }
-
     private class CoilCropImageLoader(private val context: Context) : CropImageLoader {
         override fun load(request: ImageLoadRequest, callback: ImageLoadCallback): Cancelable {
             val imageRequest = ImageRequest.Builder(context)
@@ -323,5 +295,9 @@ class CropActivity : AppCompatActivity() {
                 disposable.dispose()
             }
         }
+    }
+
+    private fun createStartBitmap(): Bitmap {
+        return AppCompatResources.getDrawable(this@CropActivity, R.drawable.star)!!.toBitmap()
     }
 }

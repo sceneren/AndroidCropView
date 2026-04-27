@@ -3,6 +3,7 @@ package com.github.sceneren.cropview
 import android.graphics.Bitmap
 import android.net.Uri
 import java.io.File
+import androidx.core.net.toUri
 
 sealed class CropImageSource {
     data class UriSource(val uri: Uri) : CropImageSource()
@@ -23,7 +24,7 @@ sealed class CropImageSource {
                 value.startsWith("http://", ignoreCase = true) ||
                     value.startsWith("https://", ignoreCase = true) -> UrlSource(value)
                 value.startsWith("content://", ignoreCase = true) ||
-                    value.startsWith("file://", ignoreCase = true) -> UriSource(Uri.parse(value))
+                    value.startsWith("file://", ignoreCase = true) -> UriSource(value.toUri())
                 else -> FileSource(File(value))
             }
         }
