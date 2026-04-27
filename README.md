@@ -4,6 +4,11 @@
 
 [English](README.md) | [简体中文](README_zh.md)
 
+## Demo
+
+- [Watch the crop interaction demo](docs/media/androidcropview-demo.mp4)
+- [Download demo APK](docs/releases/AndroidCropView-0.0.1.apk)
+
 AndroidCropView is a custom Android image cropping view. It does not depend on a third-party crop widget. The project contains:
 
 - `:cropview`: a reusable Android library module.
